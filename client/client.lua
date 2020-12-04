@@ -34,100 +34,108 @@ Citizen.CreateThread(function()
   end
 end)
 
+
+
+Citizen.CreateThread(function() 
+    ped = GetHashKey(Config.DealerPed)
+    RequestModel(ped)
+    while not HasModelLoaded(ped) do
+        Wait(1)
+    end
+    if Config.EnablePeds then
+        for _, dealer in pairs(Config.Location) do
+            local npc = CreatePed(1, ped, dealer.x, dealer.y, dealer.z-1.0, dealer.heading, false, true)
+
+            SetEntityHeading(npc, dealer.heading)
+            FreezeEntityPosition(npc, true)
+            SetEntityInvincible(npc, true)
+            SetBlockingOfNonTemporaryEvents(npc, true)
+        end
+    end
+end)
+
+local menuOpen = false
+local wasOpen = false
+
+
 Citizen.CreateThread(function()
-   
     while true do
         local sleep = 5000
         local _source = source
         local ped = PlayerPedId()
         local pedCoords = GetEntityCoords(ped)
-
-        for i = 1, #Config.Doctor, 1 do
-            local konum = Config.Doctor[i]
+        for i = 1, #Config.Location, 1 do 
+            local konum = Config.Location[i]
             local userDst = GetDistanceBetweenCoords(pedCoords, konum.x, konum.y, konum.z, true)
-
             if userDst <= 15 then
                 sleep = 2
-                if userDst <= 5 then
-                    DrawText3D(konum.x, konum.y, konum.z, '[E] basarak canlan $'.. Config.doctorPrice)
-                    DrawMarker(27, konum.x, konum.y, konum.z-0.9, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 2.0, 2.0, 1.0, 255, 195, 18, 100, false, true, 2, false, false, false, false)
-                    if userDst <= 1.5 then
-                        if IsControlJustPressed(0, 38) then
-                            ESX.TriggerServerCallback('ali:getEms', function(cb)
-                                canEms = cb
-                            end, i)
-                            while canEms == nil do
-                                Wait(0)
-                            end
-                            if Config.DoctorLimit then
-                                if canEms == true then
-                                    
-                                    ESX.TriggerServerCallback('ali-npcdoctor:parakontrol', function(hasEnoughMoney)
-                                        if hasEnoughMoney then
-                                            local formattedCoords = {
-                                                x = ESX.Math.Round(pedCoords.x, 1),
-                                                y = ESX.Math.Round(pedCoords.y, 1),
-                                                z = ESX.Math.Round(pedCoords.z, 1)
-                                            }
-                                            TriggerEvent('esx_ambulancejob:revive', formattedCoords)
-                                            TriggerServerEvent('ali-npcdoctor:money')
-                                        else
-                                            exports['mythic_notify']:DoHudText('error', 'Yeteri kadar paran yok!')
-                                        end
-                                    end)
-
-                                elseif canEms == 'no_ems' then
-                                    exports['mythic_notify']:DoHudText('error', 'Şehirde yeterli Doktor var onlara tedavi ol')                          
-                                end 
-                            else
-                                ESX.TriggerServerCallback('ali-npcdoctor:parakontrol', function(hasEnoughMoney)
-                                    if hasEnoughMoney then
-                                        local formattedCoords = {
-                                            x = ESX.Math.Round(pedCoords.x, 1),
-                                            y = ESX.Math.Round(pedCoords.y, 1),
-                                            z = ESX.Math.Round(pedCoords.z, 1)
-                                        }
-                                        TriggerEvent('esx_ambulancejob:revive', formattedCoords)
-                                        TriggerServerEvent('ali-npcdoctor:money')
-                                    else
-                                        exports['mythic_notify']:DoHudText('error', 'Yeteri kadar paran yok!')
-                                    end
-                                end)
-                            end
+                if (userDst <= 5) then
+                    if Config.DrawText then
+                        DrawText3D(konum.x, konum.y, konum.z, 'Satıcı ile konusmak için [E] Tusuna bas')
+                    end
+                    if userDst <= 1.0 then
+                        if Config.DrawText then
+                            
+                        else
+                            ESX.ShowHelpNotification('Satıcı ile konusmak için [E] Tusuna bas')
                         end
+                        if IsControlJustPressed(0, 38) then
+                            wasOpen = true
+                            OpenDealer()
+                        end
+                    else
+                        if wasOpen  then
+							wasOpen = false
+							ESX.UI.Menu.CloseAll()
+                        end
+                        Citizen.Wait(500)
                     end
                 end
             end
-
-        end
-
+        end 
         Citizen.Wait(sleep)
     end
 end)
 
-
-
-Citizen.CreateThread(function()
-    RequestModel(GetHashKey("s_m_m_doctor_01"))
-	
-    while not HasModelLoaded(GetHashKey("s_m_m_doctor_01")) do
-        Wait(1)
+function OpenDealer() 
+    ESX.UI.Menu.CloseAll()
+    local elements = {}
+    menuOpen = true
+    for k, v in pairs(ESX.GetPlayerData().inventory) do
+        local price = Config.DealerItems[v.name]
+        print(v.count)
+        if v.count == 0 then
+            table.insert(elements, {
+                label = ('Satacak bir şeyin yok.')
+            })
+        else
+            if price and v.count > 0 then
+                table.insert(elements, {
+                    label = ('%s - <span style="color:green;">%s</span>'):format(v.label, '$'..ESX.Math.GroupDigits(price)),
+                    name = v.name,
+                    price = price,
+    
+                    type = 'slider',
+                    value = 1,
+                    min = 1,
+                    max = v.count
+                })
+            end
+        end
+        
     end
-	
-	if Config.EnablePeds then
-        for _, doctor in pairs(Config.Doctor) do
-            
-			local npc = CreatePed(4, 0xd47303ac, doctor.x, doctor.y, doctor.z-1.0, doctor.heading, false, true)
-			
-			SetEntityHeading(npc, doctor.heading)
-			FreezeEntityPosition(npc, true)
-			SetEntityInvincible(npc, true)
-			SetBlockingOfNonTemporaryEvents(npc, true)
-		end
-	end
-end)
 
-
+    ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'dealer_shop', {
+        title = 'Satıcı',
+        align = 'left',
+        elements = elements
+    }, function(data, menu)
+        TriggerServerEvent('ali-selling:sellItem', data.current.name, data.current.value)
+    end, function(data, menu)
+        menu.close()
+        menuOpen = false
+    end)
+end
 
 function DrawText3D(x,y,z,text,size)
     local onScreen,_x,_y=World3dToScreen2d(x,y,z)
@@ -145,21 +153,3 @@ function DrawText3D(x,y,z,text,size)
     local factor = (string.len(text)) / 370
     DrawRect(_x,_y+0.0125, 0.015+ factor, 0.03, 41, 11, 41, 68)
 end
-
-Citizen.CreateThread(function()
-    if Config.EnableBlips then
-        for k,v in pairs(Config.Doctor) do
-            local blip = AddBlipForCoord(v.x, v.y, v.z)
-
-            SetBlipSprite (blip, 403)
-            SetBlipDisplay(blip, 2)
-            SetBlipScale  (blip, 1.0)
-            SetBlipColour (blip, 2)
-            SetBlipAsShortRange(blip, true)
-
-            BeginTextCommandSetBlipName("STRING")
-            AddTextComponentString('Hastane')
-            EndTextCommandSetBlipName(blip)
-        end
-    end
-end)
